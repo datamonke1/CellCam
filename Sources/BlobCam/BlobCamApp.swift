@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 @main
-struct CellCamApp: App {
+struct BlobCamApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

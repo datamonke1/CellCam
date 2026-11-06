@@ -249,7 +249,8 @@ final class CameraService: NSObject, ObservableObject {
             let filtered = settings.filter.applied(
                 to: zoomData,
                 red: settings.channelRed, green: settings.channelGreen,
-                blue: settings.channelBlue, alpha: settings.channelAlpha) ?? zoomData
+                blue: settings.channelBlue, alpha: settings.channelAlpha,
+                contrast: settings.contrast) ?? zoomData
             self?.save(filtered, suffix: "3-zoom-filter", at: seriesDate)
             self?.finishSeries(settings: settings, error: nil)
         }
@@ -396,6 +397,7 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
             to: image,
             red: settings.channelRed, green: settings.channelGreen,
             blue: settings.channelBlue, alpha: 1) // alpha handled by the view (checkerboard)
+        image = CellPhotoFilter.applyContrast(to: image, value: settings.contrast)
 
         // Downscale for speed on the iPhone 7, then render.
         let scale: CGFloat = 480 / max(image.extent.width, 1)

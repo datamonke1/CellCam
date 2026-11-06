@@ -1,4 +1,4 @@
-name: CellCam
+name: BlobCam
 options:
   bundleIdPrefix: dev.datamonke1
   deploymentTarget:
@@ -9,25 +9,26 @@ settings:
     TARGETED_DEVICE_FAMILY: "1"
     IPHONEOS_DEPLOYMENT_TARGET: "15.0"
 targets:
-  CellCam:
+  BlobCam:
     type: application
     platform: iOS
     sources:
-      - path: Sources/CellCam
+      - path: Sources/BlobCam
     info:
-      path: Sources/CellCam/Info.plist
+      path: Sources/BlobCam/Info.plist
       properties:
-        CFBundleDisplayName: CellCam
+        CFBundleDisplayName: BlobCam
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSCameraUsageDescription: "CellCam uses the camera to take hourly photos of your cell sample."
-        NSPhotoLibraryAddUsageDescription: "CellCam saves the timelapse photos to your photo library."
-        NSPhotoLibraryUsageDescription: "CellCam saves the timelapse photos to your photo library."
+        NSCameraUsageDescription: "BlobCam uses the camera to take hourly photos of your blob."
+        NSPhotoLibraryAddUsageDescription: "BlobCam saves the timelapse photos to your photo library."
+        NSPhotoLibraryUsageDescription: "BlobCam saves the timelapse photos to your photo library."
     settings:
       base:
+        # Bundle ID intentionally unchanged: updating keeps photos + settings.
         PRODUCT_BUNDLE_IDENTIFIER: dev.datamonke1.cellcam
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Manual

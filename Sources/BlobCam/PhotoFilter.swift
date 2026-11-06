@@ -65,12 +65,25 @@ enum CellPhotoFilter: String, Codable, CaseIterable, Identifiable {
         return f?.outputImage ?? image
     }
 
-    /// Full chain for a saved photo: preset + channel gains. Returns JPEG data.
-    func applied(to jpegData: Data, red: Double, green: Double, blue: Double, alpha: Double) -> Data? {
+    /// Extra contrast (contrast slider), 1 = unchanged.
+    static func applyContrast(to image: CIImage, value: Double) -> CIImage {
+        guard value != 1 else { return image }
+        let f = CIFilter(name: "CIColorControls")
+        f?.setValue(image, forKey: kCIInputImageKey)
+        f?.setValue(value, forKey: kCIInputContrastKey)
+        f?.setValue(0, forKey: kCIInputBrightnessKey)
+        f?.setValue(1, forKey: kCIInputSaturationKey)
+        return f?.outputImage ?? image
+    }
+
+    /// Full chain for a saved photo: preset + channels + contrast. Returns JPEG data.
+    func applied(to jpegData: Data, red: Double, green: Double, blue: Double, alpha: Double,
+                 contrast: Double) -> Data? {
         guard let ciImage = CIImage(data: jpegData,
                                     options: [.applyOrientationProperty: true]) else { return nil }
         var output = applied(to: ciImage)
         output = Self.applyChannels(to: output, red: red, green: green, blue: blue, alpha: alpha)
+        output = Self.applyContrast(to: output, value: contrast)
         let context = CIContext()
         guard let cgImage = context.createCGImage(output, from: output.extent) else { return nil }
         return UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9)

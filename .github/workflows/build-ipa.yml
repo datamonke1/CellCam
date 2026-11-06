@@ -1,6 +1,6 @@
 name: Build unsigned IPA
 
-# Builds CellCam on a cloud Mac (no local Mac needed), without signing.
+# Builds BlobCam on a cloud Mac (no local Mac needed), without signing.
 # The resulting .ipa is signed + installed from Linux with SideStore/AltServer-Linux
 # using a free Apple ID. Free signing expires after 7 days -> re-run + refresh weekly.
 
@@ -30,8 +30,8 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild build \
-            -project CellCam.xcodeproj \
-            -scheme CellCam \
+            -project BlobCam.xcodeproj \
+            -scheme BlobCam \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build/DerivedData \
@@ -46,13 +46,13 @@ jobs:
           echo "Packaging $APP"
           rm -rf build/Payload && mkdir -p build/Payload
           cp -R "$APP" build/Payload/
-          (cd build && zip -qry CellCam-unsigned.ipa Payload)
-          ls -lh build/CellCam-unsigned.ipa
+          (cd build && zip -qry BlobCam-unsigned.ipa Payload)
+          ls -lh build/BlobCam-unsigned.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: CellCam-unsigned-ipa
-          path: build/CellCam-unsigned.ipa
+          name: BlobCam-unsigned-ipa
+          path: build/BlobCam-unsigned.ipa
           if-no-files-found: error
           retention-days: 14

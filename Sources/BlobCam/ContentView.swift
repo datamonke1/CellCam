@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var autoZoomEnabled = false
     @State private var autoZoomFillPercent: Double = 80
     @State private var filter: CellPhotoFilter = .contrast
+    @State private var contrast: Double = 1.0
     @State private var channelRed: Double = 1.0
     @State private var channelGreen: Double = 1.0
     @State private var channelBlue: Double = 1.0
@@ -31,6 +32,7 @@ struct ContentView: View {
                     autoZoomEnabled: autoZoomEnabled,
                     autoZoomFillPercent: autoZoomFillPercent,
                     filter: filter,
+                    contrast: contrast,
                     channelRed: channelRed, channelGreen: channelGreen,
                     channelBlue: channelBlue, channelAlpha: channelAlpha,
                     intervalMinutes: intervalMinutes,
@@ -62,6 +64,7 @@ struct ContentView: View {
             if configured { camera.setZoom(CGFloat(zoom)) }
         }
         .onChange(of: filter) { _ in syncPreview() }
+        .onChange(of: contrast) { _ in syncPreview() }
         .onChange(of: channelRed) { _ in syncPreview() }
         .onChange(of: channelGreen) { _ in syncPreview() }
         .onChange(of: channelBlue) { _ in syncPreview() }
@@ -146,7 +149,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Speicherplatz")
                 .font(.subheadline.bold())
-            Text("CellCam: \(camera.photoCount) Fotos · \(Self.formatBytes(camera.totalPhotoBytes)) belegt")
+            Text("BlobCam: \(camera.photoCount) Fotos · \(Self.formatBytes(camera.totalPhotoBytes)) belegt")
                 .font(.footnote)
             Text("Frei auf dem iPhone: \(Self.formatBytes(camera.deviceFreeBytes))")
                 .font(.footnote)
@@ -195,14 +198,20 @@ struct ContentView: View {
                 }
                 .pickerStyle(.menu)
 
+                HStack {
+                    Text("Kontrast \(String(format: "%.2f", contrast))")
+                        .font(.subheadline).monospacedDigit()
+                    Slider(value: $contrast, in: 0.4...2.0, step: 0.05)
+                }
+
                 Text("Farbkanäle einzeln")
                     .font(.subheadline.bold())
                 channelSlider("Rot", value: $channelRed, color: .red)
                 channelSlider("Grün", value: $channelGreen, color: .green)
                 channelSlider("Blau", value: $channelBlue, color: .blue)
                 channelSlider("Alpha", value: $channelAlpha, color: .gray, range: 0...1)
-                Button("Kanäle zurücksetzen") {
-                    channelRed = 1; channelGreen = 1; channelBlue = 1; channelAlpha = 1
+                Button("Kanäle + Kontrast zurücksetzen") {
+                    channelRed = 1; channelGreen = 1; channelBlue = 1; channelAlpha = 1; contrast = 1
                 }
                 .font(.caption)
                 Text("Alpha sieht man im Live-Bild auf dem Schachbrett; im gespeicherten JPEG wird Transparenz auf Schwarz abgeflacht.")
@@ -306,6 +315,7 @@ struct ContentView: View {
         autoZoomEnabled = settings.autoZoomEnabled
         autoZoomFillPercent = settings.autoZoomFillPercent
         filter = settings.filter
+        contrast = settings.contrast
         channelRed = settings.channelRed
         channelGreen = settings.channelGreen
         channelBlue = settings.channelBlue

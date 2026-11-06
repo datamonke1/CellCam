@@ -9,6 +9,9 @@ struct AppSettings: Codable, Equatable {
     /// Auto-zoom target: blob should fill this share of the image width (percent).
     var autoZoomFillPercent: Double = 80
     var filter: CellPhotoFilter = .contrast
+    /// Extra contrast gain, 0.4...2.0, 1 = unchanged. Applies on top of
+    /// the chosen filter, in the live preview and on photo 3.
+    var contrast: Double = 1.0
     /// Per-channel gains (colour matrix), 0...2, 1 = unchanged.
     var channelRed: Double = 1.0
     var channelGreen: Double = 1.0
@@ -25,6 +28,7 @@ struct AppSettings: Codable, Equatable {
     init(flashEnabled: Bool = true, zoomFactor: Double = 2.0,
          autoZoomEnabled: Bool = false, autoZoomFillPercent: Double = 80,
          filter: CellPhotoFilter = .contrast,
+         contrast: Double = 1.0,
          channelRed: Double = 1.0, channelGreen: Double = 1.0,
          channelBlue: Double = 1.0, channelAlpha: Double = 1.0,
          intervalMinutes: Int = 60, saveToPhotos: Bool = true) {
@@ -33,6 +37,7 @@ struct AppSettings: Codable, Equatable {
         self.autoZoomEnabled = autoZoomEnabled
         self.autoZoomFillPercent = autoZoomFillPercent
         self.filter = filter
+        self.contrast = contrast
         self.channelRed = channelRed
         self.channelGreen = channelGreen
         self.channelBlue = channelBlue
@@ -48,6 +53,7 @@ struct AppSettings: Codable, Equatable {
         autoZoomEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoZoomEnabled) ?? false
         autoZoomFillPercent = try c.decodeIfPresent(Double.self, forKey: .autoZoomFillPercent) ?? 80
         filter = try c.decodeIfPresent(CellPhotoFilter.self, forKey: .filter) ?? .contrast
+        contrast = try c.decodeIfPresent(Double.self, forKey: .contrast) ?? 1.0
         channelRed = try c.decodeIfPresent(Double.self, forKey: .channelRed) ?? 1.0
         channelGreen = try c.decodeIfPresent(Double.self, forKey: .channelGreen) ?? 1.0
         channelBlue = try c.decodeIfPresent(Double.self, forKey: .channelBlue) ?? 1.0
