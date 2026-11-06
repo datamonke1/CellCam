@@ -142,7 +142,7 @@ final class CameraService: NSObject, ObservableObject {
         capturePhotoData { [weak self] result in
             switch result {
             case .success(let data):
-                self?.save(data, suffix: "test", at: Date())
+                self?.save(data, suffix: "Testfoto", at: Date())
             case .failure(let error):
                 self?.reportError("Capture failed: \(error.localizedDescription)")
             }
@@ -188,7 +188,7 @@ final class CameraService: NSObject, ObservableObject {
                     self?.finishSeries(settings: settings,
                                        error: "Foto 1 fehlgeschlagen: \(error.localizedDescription)")
                 case .success(let normalData):
-                    self?.save(normalData, suffix: "1-normal", at: seriesDate)
+                    self?.save(normalData, suffix: "Foto-1-normal", at: seriesDate)
                     self?.captureZoomPhoto(settings: settings, seriesDate: seriesDate, normalData: normalData)
                 }
             }
@@ -234,7 +234,7 @@ final class CameraService: NSObject, ObservableObject {
                         self?.finishSeries(settings: settings,
                                            error: "Foto 2 fehlgeschlagen: \(error.localizedDescription)")
                     case .success(let zoomData):
-                        self?.save(zoomData, suffix: "2-zoom", at: seriesDate)
+                        self?.save(zoomData, suffix: "Foto-2-zoom", at: seriesDate)
                         self?.saveFilteredPhoto(settings: settings, seriesDate: seriesDate, zoomData: zoomData)
                     }
                 }
@@ -251,7 +251,7 @@ final class CameraService: NSObject, ObservableObject {
                 red: settings.channelRed, green: settings.channelGreen,
                 blue: settings.channelBlue, alpha: settings.channelAlpha,
                 contrast: settings.contrast) ?? zoomData
-            self?.save(filtered, suffix: "3-zoom-filter", at: seriesDate)
+            self?.save(filtered, suffix: "Foto-3-zoom-filter", at: seriesDate)
             self?.finishSeries(settings: settings, error: nil)
         }
     }
@@ -331,22 +331,54 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     static func date(fromFileName name: String) -> Date? {
-        // cell-yyyyMMdd-HHmmss[-suffix].jpg — the timestamp is the first
-        // 15 chars after "cell-".
+        let formatter = DateFormatter()
+        if name.hasPrefix("Serie_") || name.hasPrefix("Einzel_") {
+            // Serie_yyyy-MM-dd_HH-mm-ss_...
+            let stamp = name.drop(while: { $0 != "_" }).dropFirst().prefix(19)
+            guard stamp.count == 19 else { return nil }
+            formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+            return formatter.date(from: String(stamp))
+        }
+        // Legacy: cell-yyyyMMdd-HHmmss[-suffix].jpg
         guard name.hasPrefix("cell-") else { return nil }
         let stamp = name.dropFirst(5).prefix(15)
         guard stamp.count == 15 else { return nil }
-        let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return formatter.date(from: String(stamp))
+    }
+
+    /// 1, 2 or 3 for series photos, nil for single/test photos.
+    /// Works for new (Foto-1-...) and legacy (-1-normal) names.
+    static func photoNumber(fromFileName name: String) -> Int? {
+        for n in 1...3 {
+            if name.contains("Foto-\(n)-") || name.contains("-\(n)-") { return n }
+        }
+        return nil
+    }
+
+    /// Group id: photos of one series share it, every other photo is its own group.
+    static func seriesID(fromFileName name: String) -> String {
+        if photoNumber(fromFileName: name) != nil, let date = date(fromFileName: name) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+            return "serie-" + formatter.string(from: date)
+        }
+        return "single-" + name
     }
 
     // MARK: - Saving
 
     private func save(_ data: Data, suffix: String, at date: Date) {
+        // Clear naming: all photos of one series share the same timestamp,
+        // and Foto-1/2/3 says which one it is.
+        //   Serie_2026-11-06_18-45-00_Foto-1-normal.jpg
+        //   Serie_2026-11-06_18-45-00_Foto-2-zoom.jpg
+        //   Serie_2026-11-06_18-45-00_Foto-3-zoom-filter.jpg
+        //   Einzel_2026-11-06_18-45-00_Testfoto.jpg
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        let name = "cell-\(formatter.string(from: date))-\(suffix).jpg"
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let prefix = suffix.hasPrefix("Foto-") ? "Serie" : "Einzel"
+        let name = "\(prefix)_\(formatter.string(from: date))_\(suffix).jpg"
 
         do {
             guard let dir = photosDirectory(create: true) else {
