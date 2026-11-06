@@ -4,3 +4,6 @@ DerivedData/
 *.ipa
 .DS_Store
 xcuserdata/
+
+tools/
+dist/
