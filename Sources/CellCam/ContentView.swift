@@ -16,28 +16,34 @@ struct ContentView: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 14) {
-            CameraPreview(session: camera.session)
-                .frame(maxWidth: .infinity, maxHeight: 320)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(alignment: .topLeading) {
-                    statusBadge.padding(8)
+        ScrollView {
+            VStack(spacing: 14) {
+                CameraPreview(session: camera.session)
+                    .frame(maxWidth: .infinity, maxHeight: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .topLeading) {
+                        statusBadge.padding(8)
+                    }
+
+                if let error = camera.lastError {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
                 }
 
-            if let error = camera.lastError {
-                Text(error)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
+                controls
+
+                timelapseControls
+
+                footer
+
+                Divider()
+
+                TimelineView(photoURLs: camera.photoURLs)
             }
-
-            controls
-
-            timelapseControls
-
-            footer
+            .padding()
         }
-        .padding()
         .onAppear { camera.configureIfNeeded() }
         .onReceive(tick) { _ in tickTimelapse() }
         .onChange(of: zoom) { camera.setZoom($0) }

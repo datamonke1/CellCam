@@ -14,6 +14,7 @@ final class CameraService: NSObject, ObservableObject {
     @Published var isConfigured = false
     @Published var isRunning = false
     @Published var photoCount = 0
+    @Published var photoURLs: [URL] = []
     @Published var lastPhotoAt: Date?
     @Published var lastError: String?
     @Published var maxZoom: CGFloat = 1
@@ -30,6 +31,7 @@ final class CameraService: NSObject, ObservableObject {
     // MARK: - Setup
 
     func configureIfNeeded() {
+        loadSavedPhotos()
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             configure()
@@ -115,6 +117,46 @@ final class CameraService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Photo storage / timeline
+
+    /// App-folder directory holding every photo (`cell-yyyyMMdd-HHmmss.jpg`).
+    /// File names sort chronologically, which is what the timeline uses.
+    func photosDirectory(create: Bool = false) -> URL? {
+        guard let dir = try? FileManager.default.url(
+            for: .documentDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ).appendingPathComponent("CellCam", isDirectory: true) else { return nil }
+        if create {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    /// Reloads the list of all photos taken so far (oldest first).
+    func loadSavedPhotos() {
+        guard let dir = photosDirectory() else { return }
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)) ?? []
+        let sorted = urls
+            .filter { $0.pathExtension.lowercased() == "jpg" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        DispatchQueue.main.async { [weak self] in
+            self?.photoURLs = sorted
+            self?.photoCount = sorted.count
+            if let last = sorted.last {
+                self?.lastPhotoAt = Self.date(fromFileName: last.lastPathComponent)
+            }
+        }
+    }
+
+    static func date(fromFileName name: String) -> Date? {
+        // cell-yyyyMMdd-HHmmss.jpg
+        let core = name.dropFirst(5).dropLast(4)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.date(from: String(core))
+    }
+
     // MARK: - Saving
 
     private func save(_ data: Data) {
@@ -123,11 +165,10 @@ final class CameraService: NSObject, ObservableObject {
         let name = "cell-\(formatter.string(from: Date())).jpg"
 
         do {
-            let dir = try FileManager.default.url(
-                for: .documentDirectory, in: .userDomainMask,
-                appropriateFor: nil, create: true
-            ).appendingPathComponent("CellCam", isDirectory: true)
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            guard let dir = photosDirectory(create: true) else {
+                reportError("Saving failed: no documents directory.")
+                return
+            }
             try data.write(to: dir.appendingPathComponent(name), options: .atomic)
         } catch {
             reportError("Saving to app folder failed: \(error.localizedDescription)")
@@ -142,10 +183,9 @@ final class CameraService: NSObject, ObservableObject {
         }
 
         DispatchQueue.main.async { [weak self] in
-            self?.photoCount += 1
-            self?.lastPhotoAt = Date()
             self?.lastError = nil
         }
+        loadSavedPhotos()
     }
 
     private func reportError(_ message: String) {
