@@ -5,12 +5,28 @@ import UIKit
 /// Tap a thumbnail to see it full-screen.
 struct TimelineView: View {
     let photoURLs: [URL]
+    let onDelete: (URL) -> Void
+    let onDeleteAll: () -> Void
     @State private var selected: URL?
+    @State private var confirmDeleteAll = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Timeline — \(photoURLs.count) Foto\(photoURLs.count == 1 ? "" : "s")")
-                .font(.subheadline.bold())
+            HStack {
+                Text("Timeline — \(photoURLs.count) Foto\(photoURLs.count == 1 ? "" : "s")")
+                    .font(.subheadline.bold())
+                Spacer()
+                if !photoURLs.isEmpty {
+                    Button("Alle löschen", role: .destructive) { confirmDeleteAll = true }
+                        .font(.caption)
+                }
+            }
+            .alert("Alle Fotos löschen?", isPresented: $confirmDeleteAll) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Alle löschen", role: .destructive) { onDeleteAll() }
+            } message: {
+                Text("Alle \(photoURLs.count) Fotos im App-Ordner werden gelöscht. Kopien in der Fotos-App bleiben erhalten.")
+            }
 
             if photoURLs.isEmpty {
                 Text("Noch keine Fotos. Nimm ein Testfoto auf!")
@@ -53,7 +69,7 @@ struct TimelineView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $selected) { url in
-            PhotoDetailView(url: url)
+            PhotoDetailView(url: url, onDelete: onDelete)
         }
     }
 
@@ -102,7 +118,9 @@ private struct Thumbnail: View {
 
 private struct PhotoDetailView: View {
     let url: URL
+    let onDelete: (URL) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
 
     var body: some View {
         NavigationView {
@@ -129,9 +147,25 @@ private struct PhotoDetailView: View {
             .navigationTitle("Foto")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Fertig") { dismiss() }
                 }
+            }
+            .alert("Dieses Foto löschen?", isPresented: $confirmDelete) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Löschen", role: .destructive) {
+                    onDelete(url)
+                    dismiss()
+                }
+            } message: {
+                Text("Das Foto wird aus dem App-Ordner gelöscht. Eine Kopie in der Fotos-App bleibt erhalten.")
             }
         }
     }

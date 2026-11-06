@@ -23,12 +23,23 @@ final class CameraService: NSObject, ObservableObject {
     @Published var deviceFreeBytes: Int64 = 0
     @Published var seriesInProgress = false
     @Published var seriesStatus: String?
+    /// Latest filtered frame for the live Settings preview.
+    @Published var livePreviewImage: UIImage?
+
+    /// When true, video frames are rendered (filtered) for the Settings tab.
+    var livePreviewActive = false
+    /// Settings snapshot used to filter the live preview; kept in sync by the UI.
+    var previewSettings = AppSettings()
 
     var flashEnabled = true
     var saveToPhotos = true
 
     let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoQueue = DispatchQueue(label: "dev.datamonke1.cellcam.video")
+    private let ciContext = CIContext()
+    private var lastPreviewAt = Date.distantPast
     private var device: AVCaptureDevice?
     private let sessionQueue = DispatchQueue(label: "dev.datamonke1.cellcam.session")
 
@@ -72,6 +83,16 @@ final class CameraService: NSObject, ObservableObject {
 
             self.session.addInput(input)
             self.session.addOutput(self.photoOutput)
+
+            // Video output feeds the filtered live preview (Settings tab).
+            self.videoOutput.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ]
+            self.videoOutput.alwaysDiscardsLateVideoFrames = true
+            self.videoOutput.setSampleBufferDelegate(self, queue: self.videoQueue)
+            if self.session.canAddOutput(self.videoOutput) {
+                self.session.addOutput(self.videoOutput)
+            }
             self.session.commitConfiguration()
 
             self.device = camera
@@ -225,7 +246,10 @@ final class CameraService: NSObject, ObservableObject {
         setSeriesStatus("Serie läuft: Foto 3 (Zoom + \(settings.filter.displayName))…")
         // 3) Filtered version of photo 2 (same moment, software filter)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let filtered = settings.filter.applied(to: zoomData) ?? zoomData
+            let filtered = settings.filter.applied(
+                to: zoomData,
+                red: settings.channelRed, green: settings.channelGreen,
+                blue: settings.channelBlue, alpha: settings.channelAlpha) ?? zoomData
             self?.save(filtered, suffix: "3-zoom-filter", at: seriesDate)
             self?.finishSeries(settings: settings, error: nil)
         }
@@ -291,6 +315,20 @@ final class CameraService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Deleting photos (app folder only; Photos-library copies stay)
+
+    func deletePhoto(_ url: URL) {
+        try? FileManager.default.removeItem(at: url)
+        loadSavedPhotos()
+    }
+
+    func deleteAllPhotos() {
+        for url in photoURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+        loadSavedPhotos()
+    }
+
     static func date(fromFileName name: String) -> Date? {
         // cell-yyyyMMdd-HHmmss[-suffix].jpg — the timestamp is the first
         // 15 chars after "cell-".
@@ -336,6 +374,37 @@ final class CameraService: NSObject, ObservableObject {
     private func reportError(_ message: String) {
         DispatchQueue.main.async { [weak self] in
             self?.lastError = message
+        }
+    }
+}
+
+// MARK: - Live preview frames (filtered, for the Settings tab)
+
+extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput,
+                       didOutput sampleBuffer: CMSampleBuffer,
+                       from connection: AVCaptureConnection) {
+        guard livePreviewActive,
+              Date().timeIntervalSince(lastPreviewAt) > 0.12, // ~8 fps is enough
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        lastPreviewAt = Date()
+
+        let settings = previewSettings
+        var image = CIImage(cvPixelBuffer: pixelBuffer)
+        image = settings.filter.applied(to: image)
+        image = CellPhotoFilter.applyChannels(
+            to: image,
+            red: settings.channelRed, green: settings.channelGreen,
+            blue: settings.channelBlue, alpha: 1) // alpha handled by the view (checkerboard)
+
+        // Downscale for speed on the iPhone 7, then render.
+        let scale: CGFloat = 480 / max(image.extent.width, 1)
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let cgImage = ciContext.createCGImage(scaled, from: scaled.extent) else { return }
+        // Back camera in portrait: frames need a quarter turn.
+        let uiImage = UIImage(cgImage: cgImage, scale: 1, orientation: .right)
+        DispatchQueue.main.async { [weak self] in
+            self?.livePreviewImage = uiImage
         }
     }
 }
