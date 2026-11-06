@@ -60,7 +60,10 @@ struct ContentView: View {
             HStack {
                 Text("Zoom \(String(format: "%.1f", zoom))×")
                     .font(.subheadline).monospacedDigit()
-                Slider(value: $zoom, in: 1...max(camera.maxZoom, 1), step: 0.1)
+                // NOTE: upper bound must always be > 1. Before the camera is
+                // configured maxZoom is still 1, and Slider traps on a 1...1 range.
+                Slider(value: $zoom, in: 1...max(camera.maxZoom, 2), step: 0.1)
+                    .disabled(!camera.isConfigured)
             }
             HStack(spacing: 20) {
                 Toggle("Flash (Blitz)", isOn: $flashEnabled)
