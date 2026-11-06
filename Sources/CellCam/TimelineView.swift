@@ -29,6 +29,14 @@ struct TimelineView: View {
                                     Thumbnail(url: url)
                                         .frame(width: 62, height: 62)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(alignment: .topLeading) {
+                                            Text(Self.badge(for: url))
+                                                .font(.caption2.bold())
+                                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                                .background(.black.opacity(0.65), in: Capsule())
+                                                .foregroundStyle(.white)
+                                                .padding(3)
+                                        }
                                     Text(Self.timeLabel(for: url))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
@@ -46,6 +54,24 @@ struct TimelineView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $selected) { url in
             PhotoDetailView(url: url)
+        }
+    }
+
+    /// N = normal, Z = zoom, F = zoom+filter, T = single test photo.
+    static func badge(for url: URL) -> String {
+        let name = url.lastPathComponent
+        if name.contains("3-zoom-filter") { return "F" }
+        if name.contains("2-zoom") { return "Z" }
+        if name.contains("1-normal") { return "N" }
+        return "T"
+    }
+
+    static func typeName(for url: URL) -> String {
+        switch badge(for: url) {
+        case "N": return "Normal (ohne Zoom/Filter)"
+        case "Z": return "Zoom"
+        case "F": return "Zoom + Farbfilter"
+        default: return "Testfoto"
         }
     }
 
@@ -88,6 +114,8 @@ private struct PhotoDetailView: View {
                 } else {
                     Text("Foto konnte nicht geladen werden.")
                 }
+                Text(TimelineView.typeName(for: url))
+                    .font(.subheadline.bold())
                 Text(url.lastPathComponent)
                     .font(.caption)
                     .foregroundStyle(.secondary)
