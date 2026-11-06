@@ -1,0 +1,58 @@
+name: Build unsigned IPA
+
+# Builds CellCam on a cloud Mac (no local Mac needed), without signing.
+# The resulting .ipa is signed + installed from Linux with SideStore/AltServer-Linux
+# using a free Apple ID. Free signing expires after 7 days -> re-run + refresh weekly.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Sources/**"
+      - "project.yml"
+      - ".github/workflows/build-ipa.yml"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project CellCam.xcodeproj \
+            -scheme CellCam \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "Packaging $APP"
+          rm -rf build/Payload && mkdir -p build/Payload
+          cp -R "$APP" build/Payload/
+          (cd build && zip -qry CellCam-unsigned.ipa Payload)
+          ls -lh build/CellCam-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CellCam-unsigned-ipa
+          path: build/CellCam-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14

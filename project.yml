@@ -1,0 +1,33 @@
+name: CellCam
+options:
+  bundleIdPrefix: dev.datamonke1
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+targets:
+  CellCam:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/CellCam
+    info:
+      path: Sources/CellCam/Info.plist
+      properties:
+        CFBundleDisplayName: CellCam
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: "CellCam uses the camera to take hourly photos of your cell sample."
+        NSPhotoLibraryAddUsageDescription: "CellCam saves the timelapse photos to your photo library."
+        NSPhotoLibraryUsageDescription: "CellCam saves the timelapse photos to your photo library."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.datamonke1.cellcam
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        CODE_SIGN_STYLE: Manual
