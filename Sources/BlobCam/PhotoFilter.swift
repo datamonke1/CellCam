@@ -8,6 +8,10 @@ import UIKit
 /// The same chain drives the live preview in the Settings tab.
 enum CellPhotoFilter: String, Codable, CaseIterable, Identifiable {
     case none
+    case yellowBoost
+    case redOnly
+    case greenOnly
+    case blueOnly
     case contrast
     case invert
     case mono
@@ -18,6 +22,10 @@ enum CellPhotoFilter: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .none: return "Keiner"
+        case .yellowBoost: return "Gelb verstärken (Blob)"
+        case .redOnly: return "Nur Rot-Kanal"
+        case .greenOnly: return "Nur Grün-Kanal"
+        case .blueOnly: return "Nur Blau-Kanal"
         case .contrast: return "Kontrast"
         case .invert: return "Invertiert"
         case .mono: return "Schwarz-Weiss"
@@ -25,11 +33,41 @@ enum CellPhotoFilter: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// True channel isolation: the other two channels are set to zero,
+    /// so ONLY the chosen channel remains (not just a colour tint).
+    private static func isolate(_ image: CIImage, red: Bool, green: Bool, blue: Bool) -> CIImage {
+        let f = CIFilter(name: "CIColorMatrix")
+        f?.setValue(image, forKey: kCIInputImageKey)
+        f?.setValue(CIVector(x: red ? 1 : 0, y: 0, z: 0, w: 0), forKey: "inputRVector")
+        f?.setValue(CIVector(x: 0, y: green ? 1 : 0, z: 0, w: 0), forKey: "inputGVector")
+        f?.setValue(CIVector(x: 0, y: 0, z: blue ? 1 : 0, w: 0), forKey: "inputBVector")
+        f?.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
+        return f?.outputImage ?? image
+    }
+
     /// Applies this preset to a CIImage (used for live preview and photos).
     func applied(to image: CIImage) -> CIImage {
         switch self {
         case .none:
             return image
+        case .redOnly:
+            return Self.isolate(image, red: true, green: false, blue: false)
+        case .greenOnly:
+            return Self.isolate(image, red: false, green: true, blue: false)
+        case .blueOnly:
+            return Self.isolate(image, red: false, green: false, blue: true)
+        case .yellowBoost:
+            // The blob is yellow = red + green light, almost no blue.
+            // Boost R and G, suppress B, then push saturation so the
+            // yellow network stands out strongly from the background.
+            var out = Self.applyChannels(to: image, red: 1.5, green: 1.45, blue: 0.3, alpha: 1)
+            let f = CIFilter(name: "CIColorControls")
+            f?.setValue(out, forKey: kCIInputImageKey)
+            f?.setValue(1.9, forKey: kCIInputSaturationKey)
+            f?.setValue(1.08, forKey: kCIInputContrastKey)
+            f?.setValue(0, forKey: kCIInputBrightnessKey)
+            out = f?.outputImage ?? out
+            return out
         case .contrast:
             let f = CIFilter(name: "CIColorControls")
             f?.setValue(image, forKey: kCIInputImageKey)
