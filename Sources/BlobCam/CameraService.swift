@@ -21,6 +21,12 @@ final class CameraService: NSObject, ObservableObject {
     @Published var hasFlash = false
     @Published var totalPhotoBytes: Int64 = 0
     @Published var deviceFreeBytes: Int64 = 0
+    /// Number of photo series (groups of Foto-1/2/3) stored so far.
+    @Published var seriesCount: Int = 0
+    /// Measured average size of one series (3 photos) in bytes.
+    /// Fallback 7.5 MB until at least one series exists (iPhone 7 JPEGs
+    /// measured at roughly 1–2.5 MB per photo).
+    @Published var averageSeriesBytes: Int64 = 7_500_000
     @Published var seriesInProgress = false
     @Published var seriesStatus: String?
     /// Latest filtered frame for the live Settings preview.
@@ -303,6 +309,18 @@ final class CameraService: NSObject, ObservableObject {
         let totalBytes = sorted.reduce(Int64(0)) { sum, url in
             sum + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
+        // Measured consumption per series: sum the sizes of all series
+        // photos (Foto-1/2/3) and divide by the number of series.
+        var seriesBytes: [String: Int64] = [:]
+        for url in sorted where Self.photoNumber(fromFileName: url.lastPathComponent) != nil {
+            let id = Self.seriesID(fromFileName: url.lastPathComponent)
+            seriesBytes[id, default: 0] += Int64(
+                (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        let measuredSeriesCount = seriesBytes.count
+        let measuredAverage = measuredSeriesCount > 0
+            ? seriesBytes.values.reduce(Int64(0), +) / Int64(measuredSeriesCount)
+            : 7_500_000
         let freeBytes = (try? FileManager.default.attributesOfFileSystem(
             forPath: dir.path)[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
         DispatchQueue.main.async { [weak self] in
@@ -310,6 +328,8 @@ final class CameraService: NSObject, ObservableObject {
             self?.photoCount = sorted.count
             self?.totalPhotoBytes = totalBytes
             self?.deviceFreeBytes = freeBytes
+            self?.seriesCount = measuredSeriesCount
+            self?.averageSeriesBytes = measuredAverage
             if let last = sorted.last {
                 self?.lastPhotoAt = Self.date(fromFileName: last.lastPathComponent)
             }

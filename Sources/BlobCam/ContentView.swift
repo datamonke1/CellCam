@@ -145,6 +145,31 @@ struct ContentView: View {
         }
     }
 
+    /// Estimated days until the storage is full, with the currently
+    /// selected settings. Every series is stored in the app folder, and
+    /// (optionally) again in the Photos library on the same device.
+    private var storageDaysRemaining: Double? {
+        guard camera.deviceFreeBytes > 0, camera.averageSeriesBytes > 0,
+              intervalMinutes > 0 else { return nil }
+        let bytesPerSeries = Double(camera.averageSeriesBytes) * (saveToPhotos ? 2 : 1)
+        let seriesPerDay = 1440.0 / Double(intervalMinutes)
+        let bytesPerDay = bytesPerSeries * seriesPerDay
+        guard bytesPerDay > 0 else { return nil }
+        return Double(camera.deviceFreeBytes) / bytesPerDay
+    }
+
+    private func formatStorageDuration(days: Double) -> String {
+        if days < 1 {
+            return "ca. \(max(Int((days * 24).rounded()), 1)) Stunden"
+        } else if days < 60 {
+            return "ca. \(Int(days.rounded())) Tage"
+        } else if days < 365 {
+            return "ca. \(Int((days / 30.44).rounded())) Monate"
+        } else {
+            return "ca. \(String(format: "%.1f", days / 365.25)) Jahre"
+        }
+    }
+
     private var storageSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Speicherplatz")
@@ -157,6 +182,14 @@ struct ContentView: View {
             if camera.deviceFreeBytes > 0 {
                 ProgressView(value: Double(camera.totalPhotoBytes),
                              total: Double(camera.totalPhotoBytes + camera.deviceFreeBytes))
+            }
+            if let days = storageDaysRemaining {
+                let until = Date().addingTimeInterval(days * 86_400)
+                Text("Reicht noch \(formatStorageDuration(days: days)) (bis ca. \(until.formatted(date: .abbreviated, time: .omitted)))")
+                    .font(.footnote.bold())
+                Text("bei \(intervalMinutes) min Intervall · 3 Fotos/Serie · Ø \(Self.formatBytes(camera.averageSeriesBytes))/Serie\(saveToPhotos ? " · inkl. Fotos-App-Kopie (zählt doppelt)" : "")\(camera.seriesCount == 0 ? " · noch keine Serie gemessen, Schätzwert" : " · aus \(camera.seriesCount) Serie\(camera.seriesCount == 1 ? "" : "n") gemessen")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
