@@ -53,6 +53,7 @@ final class CameraService: NSObject, ObservableObject {
 
     func configureIfNeeded() {
         loadSavedPhotos()
+        GitHubSync.shared.enqueueMissing(from: photosDirectory())
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             configure()
@@ -405,7 +406,9 @@ final class CameraService: NSObject, ObservableObject {
                 reportError("Saving failed: no documents directory.")
                 return
             }
-            try data.write(to: dir.appendingPathComponent(name), options: .atomic)
+            let fileURL = dir.appendingPathComponent(name)
+            try data.write(to: fileURL, options: .atomic)
+            GitHubSync.shared.enqueue(fileURL: fileURL)
         } catch {
             reportError("Saving to app folder failed: \(error.localizedDescription)")
             return

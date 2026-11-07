@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var camera = CameraService()
+    @ObservedObject private var github = GitHubSync.shared
     private let settingsStore = SettingsStore()
 
     // Draft settings (edited in the UI, saved/loaded via SettingsStore)
@@ -17,6 +18,8 @@ struct ContentView: View {
     @State private var channelAlpha: Double = 1.0
     @State private var intervalMinutes = 60
     @State private var saveToPhotos = true
+    @State private var githubSyncEnabled = true
+    @State private var githubToken = ""
     @State private var settingsMessage: String?
 
     @State private var selectedTab = 0
@@ -36,7 +39,8 @@ struct ContentView: View {
                     channelRed: channelRed, channelGreen: channelGreen,
                     channelBlue: channelBlue, channelAlpha: channelAlpha,
                     intervalMinutes: intervalMinutes,
-                    saveToPhotos: saveToPhotos)
+                    saveToPhotos: saveToPhotos,
+                    githubSyncEnabled: githubSyncEnabled)
     }
 
     var body: some View {
@@ -54,6 +58,8 @@ struct ContentView: View {
                 apply(saved)
                 settingsMessage = "Gespeicherte Settings geladen"
             }
+            applyGitHubConfig()
+            github.enqueueMissing(from: camera.photosDirectory())
             syncPreview()
         }
         .onReceive(tick) { _ in tickTimelapse() }
@@ -97,6 +103,7 @@ struct ContentView: View {
 
                 timelapseControls
                 storageSection
+                githubStatusSection
 
                 Divider()
 
@@ -254,10 +261,13 @@ struct ContentView: View {
                 Toggle("In Fotos-App speichern", isOn: $saveToPhotos)
                     .font(.subheadline)
 
+                githubSettingsSection
+
                 // Save / load
                 HStack {
                     Button("Settings speichern") {
                         settingsStore.save(currentSettings)
+                        applyGitHubConfig()
                         settingsMessage = "Settings gespeichert"
                     }
                     .buttonStyle(.bordered)
@@ -329,6 +339,64 @@ struct ContentView: View {
         }
     }
 
+    private var githubStatusSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("GitHub-Sync")
+                .font(.subheadline.bold())
+            Text(github.statusText)
+                .font(.footnote)
+            if let error = github.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            Text("Ziel: github.com/\(currentSettings.githubOwner)/\(currentSettings.githubRepo) (privat)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var githubSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("GitHub-Sync")
+                .font(.subheadline.bold())
+            Toggle("Fotos nach GitHub hochladen, sobald Internet da ist", isOn: $githubSyncEnabled)
+                .onChange(of: githubSyncEnabled) { _ in applyGitHubConfig() }
+            Text("Repo: \(currentSettings.githubOwner)/\(currentSettings.githubRepo) · \(github.hasToken ? "Token gespeichert (\(github.tokenPreview()))" : "kein Token")")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            SecureField("GitHub-Token hier einfügen", text: $githubToken)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+                .font(.footnote)
+            HStack {
+                Button("Token speichern") {
+                    applyGitHubConfig()
+                    settingsStore.save(currentSettings)
+                    settingsMessage = github.hasToken ? "Token gespeichert" : "Token-Feld war leer"
+                }
+                .buttonStyle(.bordered)
+                Button("Jetzt synchronisieren") {
+                    applyGitHubConfig()
+                    github.enqueueMissing(from: camera.photosDirectory())
+                    github.flush()
+                }
+                .buttonStyle(.bordered)
+                .disabled(!githubSyncEnabled)
+            }
+            Text("Token: github.com → Settings → Developer settings → Fine-grained tokens → Generate, nur Repo blobcam_data, Berechtigung Contents: Read and write. Einmalig einfügen.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(github.statusText)
+                .font(.caption)
+            if let error = github.lastError {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func channelSlider(_ name: String, value: Binding<Double>,
                                color: Color, range: ClosedRange<Double> = 0...2) -> some View {
         HStack {
@@ -355,10 +423,22 @@ struct ContentView: View {
         channelAlpha = settings.channelAlpha
         intervalMinutes = settings.intervalMinutes
         saveToPhotos = settings.saveToPhotos
+        githubSyncEnabled = settings.githubSyncEnabled
         camera.flashEnabled = settings.flashEnabled
         camera.saveToPhotos = settings.saveToPhotos
         camera.setZoom(CGFloat(settings.zoomFactor))
+        applyGitHubConfig()
         syncPreview()
+    }
+
+    private func applyGitHubConfig() {
+        github.configure(enabled: githubSyncEnabled,
+                         owner: currentSettings.githubOwner,
+                         repo: currentSettings.githubRepo)
+        if !githubToken.isEmpty {
+            github.setToken(githubToken)
+            githubToken = "" // don't keep the secret in the text field
+        }
     }
 
     private func syncPreview() {

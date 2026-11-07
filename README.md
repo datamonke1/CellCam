@@ -32,9 +32,15 @@ it in SideStore weekly (briefly interrupting the timelapse), or re-install.
 Plan experiments in ≤7-day blocks if possible.
 
 Photos are saved both in the app's `Documents/CellCam` folder
-(`cell-yyyyMMdd-HHmmss.jpg`) and in the Photos library. The folder and bundle
-ID kept their old internal names when the app was renamed to BlobCam, so
-updating the app keeps all existing photos and saved settings.
+and in the Photos library. The folder and bundle ID kept their old internal
+names when the app was renamed to BlobCam, so updating the app keeps all
+existing photos and saved settings.
+
+When the iPhone has internet, BlobCam also uploads each JPEG to the private
+repo [datamonke1/blobcam_data](https://github.com/datamonke1/blobcam_data)
+(`photos/` folder). Paste a GitHub token once in **Settings → GitHub-Sync**
+(fine-grained PAT, Contents: Read and write, only that repo). Sync needs the
+app in the foreground (same iOS camera rule).
 
 ## Project layout
 

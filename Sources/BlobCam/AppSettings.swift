@@ -22,6 +22,9 @@ struct AppSettings: Codable, Equatable {
     /// Time T between series, in minutes.
     var intervalMinutes: Int = 60
     var saveToPhotos: Bool = true
+    var githubSyncEnabled: Bool = true
+    var githubOwner: String = "datamonke1"
+    var githubRepo: String = "blobcam_data"
 
     // Backward-compatible decoding: older saved settings (without the
     // channel fields) must still load instead of being discarded.
@@ -31,7 +34,10 @@ struct AppSettings: Codable, Equatable {
          contrast: Double = 1.0,
          channelRed: Double = 1.0, channelGreen: Double = 1.0,
          channelBlue: Double = 1.0, channelAlpha: Double = 1.0,
-         intervalMinutes: Int = 60, saveToPhotos: Bool = true) {
+         intervalMinutes: Int = 60, saveToPhotos: Bool = true,
+         githubSyncEnabled: Bool = true,
+         githubOwner: String = "datamonke1",
+         githubRepo: String = "blobcam_data") {
         self.flashEnabled = flashEnabled
         self.zoomFactor = zoomFactor
         self.autoZoomEnabled = autoZoomEnabled
@@ -44,6 +50,9 @@ struct AppSettings: Codable, Equatable {
         self.channelAlpha = channelAlpha
         self.intervalMinutes = intervalMinutes
         self.saveToPhotos = saveToPhotos
+        self.githubSyncEnabled = githubSyncEnabled
+        self.githubOwner = githubOwner
+        self.githubRepo = githubRepo
     }
 
     init(from decoder: Decoder) throws {
@@ -60,6 +69,9 @@ struct AppSettings: Codable, Equatable {
         channelAlpha = try c.decodeIfPresent(Double.self, forKey: .channelAlpha) ?? 1.0
         intervalMinutes = try c.decodeIfPresent(Int.self, forKey: .intervalMinutes) ?? 60
         saveToPhotos = try c.decodeIfPresent(Bool.self, forKey: .saveToPhotos) ?? true
+        githubSyncEnabled = try c.decodeIfPresent(Bool.self, forKey: .githubSyncEnabled) ?? true
+        githubOwner = try c.decodeIfPresent(String.self, forKey: .githubOwner) ?? "datamonke1"
+        githubRepo = try c.decodeIfPresent(String.self, forKey: .githubRepo) ?? "blobcam_data"
     }
 }
 
