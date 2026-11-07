@@ -26,6 +26,8 @@ targets:
         NSCameraUsageDescription: "BlobCam uses the camera to take hourly photos of your blob."
         NSPhotoLibraryAddUsageDescription: "BlobCam saves the timelapse photos to your photo library."
         NSPhotoLibraryUsageDescription: "BlobCam saves the timelapse photos to your photo library."
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         # Bundle ID intentionally unchanged: updating keeps photos + settings.
