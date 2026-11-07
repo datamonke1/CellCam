@@ -10,6 +10,7 @@ struct BlobCamApp: App {
                     // The phone must never sleep while a timelapse is planned:
                     // iOS kills the camera as soon as the app leaves the foreground.
                     UIApplication.shared.isIdleTimerDisabled = true
+                    GitHubSync.shared.importTokenFileIfPresent()
                 }
         }
     }

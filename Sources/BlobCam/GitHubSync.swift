@@ -56,6 +56,24 @@ final class GitHubSync: ObservableObject {
         if enabled { flush() }
     }
 
+    /// If `Documents/github-token.txt` exists (copied over USB), save that
+    /// token and delete the file so it does not stay on disk.
+    func importTokenFileIfPresent() {
+        guard let docs = try? FileManager.default.url(
+            for: .documentDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: false) else { return }
+        let url = docs.appendingPathComponent("github-token.txt")
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let token = text
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && !$0.hasPrefix("#") }
+        try? FileManager.default.removeItem(at: url)
+        if let token, token.count > 20 {
+            setToken(token)
+        }
+    }
+
     func setToken(_ token: String) {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         saveToken(trimmed.isEmpty ? nil : trimmed)
