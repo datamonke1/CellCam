@@ -37,36 +37,41 @@ struct TimelineView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Timeline — \(photoURLs.count) Foto\(photoURLs.count == 1 ? "" : "s")")
-                    .font(.subheadline.bold())
-                Spacer()
-                if !photoURLs.isEmpty {
-                    Button("Alle löschen", role: .destructive) { confirmDeleteAll = true }
-                        .font(.caption)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Timeline — \(photoURLs.count) Foto\(photoURLs.count == 1 ? "" : "s")")
+                        .font(.subheadline.bold())
+                    Spacer()
+                    if !photoURLs.isEmpty {
+                        Button("Alle löschen", role: .destructive) { confirmDeleteAll = true }
+                            .font(.caption)
+                    }
                 }
-            }
-            .alert("Alle Fotos löschen?", isPresented: $confirmDeleteAll) {
-                Button("Abbrechen", role: .cancel) {}
-                Button("Alle löschen", role: .destructive) { onDeleteAll() }
-            } message: {
-                Text("Alle \(photoURLs.count) Fotos im App-Ordner werden gelöscht. Kopien in der Fotos-App bleiben erhalten.")
-            }
-
-            if photoURLs.isEmpty {
-                Text("Noch keine Fotos. Nimm ein Testfoto auf!")
-                    .font(.caption)
+                Text("Es wird nur geladen, was gerade auf dem Bildschirm ist.")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-            } else {
-                ForEach(groups) { group in
-                    groupView(group)
+
+                if photoURLs.isEmpty {
+                    Text("Noch keine Fotos. Nimm ein Testfoto auf!")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                } else {
+                    ForEach(groups) { group in
+                        groupView(group)
+                    }
                 }
             }
+            .padding()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .alert("Alle Fotos löschen?", isPresented: $confirmDeleteAll) {
+            Button("Abbrechen", role: .cancel) {}
+            Button("Alle löschen", role: .destructive) { onDeleteAll() }
+        } message: {
+            Text("Alle \(photoURLs.count) Fotos im App-Ordner werden gelöscht. Kopien in der Fotos-App bleiben erhalten.")
+        }
         .sheet(isPresented: $showPager) {
             PhotoPagerView(urls: photoURLs,
                            startIndex: pagerIndex ?? 0,
@@ -169,27 +174,20 @@ private struct PhotoPagerView: View {
                     Text("Keine Fotos mehr.")
                         .foregroundStyle(.secondary)
                 } else {
-                    TabView(selection: $index) {
-                        ForEach(Array(urls.enumerated()), id: \.element) { i, url in
-                            Group {
-                                if abs(i - index) <= 1,
-                                   let image = ImageThumb.image(at: url, maxPixel: 1400) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFit()
-                                } else {
-                                    Color.black.opacity(0.15)
-                                        .overlay(Image(systemName: "photo")
-                                            .foregroundStyle(.secondary))
+                    let url = urls[min(index, urls.count - 1)]
+                    PagerImage(url: url)
+                        .id(url)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 30).onEnded { value in
+                                if value.translation.width < -40 {
+                                    index = min(index + 1, urls.count - 1)
+                                } else if value.translation.width > 40 {
+                                    index = max(index - 1, 0)
                                 }
                             }
-                            .tag(i)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .always))
-                    .indexViewStyle(.page(backgroundDisplayMode: .always))
-
-                    let url = urls[min(index, urls.count - 1)]
+                        )
                     Text(TimelineView.rowTitle(for: url))
                         .font(.subheadline.bold())
                     Text("Foto \(min(index, urls.count - 1) + 1) von \(urls.count) · wischen zum Blättern")
@@ -250,16 +248,42 @@ private struct PhotoPagerView: View {
 
 private struct Thumbnail: View {
     let url: URL
+    @State private var image: UIImage?
 
     var body: some View {
-        if let image = ImageThumb.image(at: url, maxPixel: 160) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else {
-            Color.gray.opacity(0.3)
-                .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.gray.opacity(0.3)
+                    .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+            }
         }
+        .onAppear { image = ImageThumb.image(at: url, maxPixel: 160) }
+        .onDisappear { image = nil }
+    }
+}
+
+/// One large photo at a time. Swiping changes the index in the pager,
+/// so the other files stay on disk.
+private struct PagerImage: View {
+    let url: URL
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                ProgressView()
+            }
+        }
+        .onAppear { image = ImageThumb.image(at: url, maxPixel: 1200) }
+        .onDisappear { image = nil }
     }
 }
 
@@ -268,7 +292,7 @@ private struct Thumbnail: View {
 enum ImageThumb {
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 120
+        cache.countLimit = 24
         return cache
     }()
 

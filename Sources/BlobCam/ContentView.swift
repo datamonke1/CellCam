@@ -51,6 +51,9 @@ struct ContentView: View {
             settingsTab
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(1)
+            viewTab
+                .tabItem { Label("Ansicht", systemImage: "photo.on.rectangle") }
+                .tag(2)
         }
         .onAppear {
             camera.configureIfNeeded()
@@ -61,6 +64,13 @@ struct ContentView: View {
             applyGitHubConfig()
             github.enqueueMissing(from: camera.photosDirectory())
             syncPreview()
+            camera.livePreviewActive = (selectedTab == 1)
+        }
+        .onChange(of: selectedTab) { tab in
+            // The filtered live picture only runs on Settings. Ansicht is
+            // built only while that tab is open, so a timelapse on Betrieb
+            // does not decode any saved photos.
+            camera.livePreviewActive = (tab == 1)
         }
         .onReceive(tick) { _ in tickTimelapse() }
         .onChange(of: zoom) { camera.setZoom(CGFloat($0)) }
@@ -105,13 +115,36 @@ struct ContentView: View {
                 storageSection
                 githubStatusSection
 
-                Divider()
+                Text("\(camera.photoCount) Fotos gespeichert. Die Vorschaubilder liegen im Tab Ansicht und werden erst dort geladen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+        }
+    }
 
+    /// Photo list is created only while this tab is selected.
+    private var viewTab: some View {
+        Group {
+            if selectedTab == 2 {
                 TimelineView(photoURLs: camera.photoURLs,
                              onDelete: { camera.deletePhoto($0) },
                              onDeleteAll: { camera.deleteAllPhotos() })
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("Vorschaubilder sind pausiert.")
+                        .font(.subheadline)
+                    Text("Öffne diesen Tab, dann laden nur die Bilder, die du siehst.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
             }
-            .padding()
         }
     }
 
@@ -309,11 +342,7 @@ struct ContentView: View {
             }
             .padding()
         }
-        .onAppear {
-            syncPreview()
-            camera.livePreviewActive = true
-        }
-        .onDisappear { camera.livePreviewActive = false }
+        .onAppear { syncPreview() }
     }
 
     /// Live picture with the current filter + channel settings applied.
