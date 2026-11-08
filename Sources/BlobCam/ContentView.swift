@@ -125,13 +125,15 @@ struct ContentView: View {
 
     private var timelapseControls: some View {
         VStack(spacing: 10) {
-            Picker("Intervall T", selection: $intervalMinutes) {
-                Text("1 min (test)").tag(1)
+            Picker("Intervall", selection: $intervalMinutes) {
+                Text("1 min (Test)").tag(1)
+                Text("5 min").tag(5)
+                Text("10 min").tag(10)
                 Text("15 min").tag(15)
                 Text("30 min").tag(30)
                 Text("60 min (stündlich)").tag(60)
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .disabled(timelapseRunning)
 
             Button(timelapseRunning ? "Timelapse stoppen" : "Timelapse starten") {

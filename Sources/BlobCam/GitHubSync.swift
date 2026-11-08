@@ -25,6 +25,10 @@ final class GitHubSync: ObservableObject {
 
     private let queue = DispatchQueue(label: "dev.datamonke1.cellcam.github")
     private var busy = false
+    private var online = false
+    private var sawPath = false
+    private var retryAt: Date?
+    private var retryScheduled = false
     private let monitor = NWPathMonitor()
     private let pendingKey = "cellcam.github.pending"
     private let syncedKey = "cellcam.github.synced"
@@ -35,12 +39,19 @@ final class GitHubSync: ObservableObject {
         pendingCount = pendingNames().count
         uploadedCount = syncedNames().count
         monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                self?.isOnline = path.status == .satisfied
-                self?.refreshStatus()
+            let up = path.status == .satisfied
+            self?.queue.async {
+                guard let self else { return }
+                self.online = up
+                self.sawPath = true
+                if up {
+                    self.retryAt = nil
+                    self.uploadNextOnQueue()
+                }
             }
-            if path.status == .satisfied {
-                self?.flush()
+            DispatchQueue.main.async {
+                self?.isOnline = up
+                self?.refreshStatus()
             }
         }
         monitor.start(queue: DispatchQueue.global(qos: .utility))
@@ -112,24 +123,44 @@ final class GitHubSync: ObservableObject {
         guard let directory else { return }
         let files = (try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: nil)) ?? []
+        var pending = pendingNames()
+        let synced = syncedNames()
+        var changed = false
         for url in files where url.pathExtension.lowercased() == "jpg" {
-            enqueue(fileURL: url)
+            let name = url.lastPathComponent
+            if synced.contains(name) || pending.contains(name) { continue }
+            pending.append(name)
+            changed = true
         }
+        if changed { savePending(pending) }
+        DispatchQueue.main.async {
+            self.pendingCount = pending.count
+            self.refreshStatus()
+        }
+        flush()
     }
 
     func flush() {
-        queue.async { [weak self] in self?.uploadNext() }
+        queue.async { [weak self] in self?.uploadNextOnQueue() }
     }
 
     // MARK: - Upload loop
 
-    private func uploadNext() {
+    private func uploadNextOnQueue() {
         guard !busy else { return }
         guard enabled else {
             DispatchQueue.main.async { self.refreshStatus() }
             return
         }
-        // Always try: NWPathMonitor can lag, URLSession fails fast if offline.
+        if let retryAt, Date() < retryAt { return }
+        guard sawPath else { return }
+        guard online else {
+            DispatchQueue.main.async {
+                self.lastError = "Kein Internet. Fotos bleiben auf dem Handy und werden später hochgeladen."
+                self.refreshStatus()
+            }
+            return
+        }
         guard let token = loadToken(), !token.isEmpty else {
             DispatchQueue.main.async {
                 self.lastError = "GitHub-Token fehlt (Settings → GitHub-Sync)."
@@ -151,7 +182,7 @@ final class GitHubSync: ObservableObject {
               let data = try? Data(contentsOf: fileURL) else {
             pending.removeAll { $0 == name }
             savePending(pending)
-            uploadNext()
+            uploadNextOnQueue()
             return
         }
 
@@ -159,28 +190,13 @@ final class GitHubSync: ObservableObject {
         DispatchQueue.main.async { self.statusText = "Lade \(name) hoch…" }
 
         putFile(name: name, data: data, token: token) { [weak self] result in
-            guard let self else { return }
-            self.busy = false
-            var pending = self.pendingNames()
-            var synced = self.syncedNames()
-            switch result {
-            case .success:
-                pending.removeAll { $0 == name }
-                synced.insert(name)
-                self.savePending(pending)
-                self.saveSynced(synced)
-                DispatchQueue.main.async {
-                    self.pendingCount = pending.count
-                    self.uploadedCount = synced.count
-                    self.lastError = nil
-                    self.refreshStatus()
-                }
-                self.uploadNext()
-            case .failure(let error):
-                let message = error.localizedDescription
-                // Already on GitHub → treat as synced.
-                if message.contains("422") || message.lowercased().contains("already")
-                    || message.contains("sha") && message.contains("exists") {
+            self?.queue.async {
+                guard let self else { return }
+                self.busy = false
+                var pending = self.pendingNames()
+                var synced = self.syncedNames()
+                switch result {
+                case .success:
                     pending.removeAll { $0 == name }
                     synced.insert(name)
                     self.savePending(pending)
@@ -191,15 +207,63 @@ final class GitHubSync: ObservableObject {
                         self.lastError = nil
                         self.refreshStatus()
                     }
-                    self.uploadNext()
-                    return
+                    self.uploadNextOnQueue()
+                case .failure(let error):
+                    let message = error.localizedDescription
+                    // Already on GitHub → treat as synced.
+                    if message.contains("422") || message.lowercased().contains("already")
+                        || message.contains("sha") && message.contains("exists") {
+                        pending.removeAll { $0 == name }
+                        synced.insert(name)
+                        self.savePending(pending)
+                        self.saveSynced(synced)
+                        DispatchQueue.main.async {
+                            self.pendingCount = pending.count
+                            self.uploadedCount = synced.count
+                            self.lastError = nil
+                            self.refreshStatus()
+                        }
+                        self.uploadNextOnQueue()
+                        return
+                    }
+                    let waiting = Self.isOffline(error)
+                    DispatchQueue.main.async {
+                        self.lastError = waiting
+                            ? "Kein Internet. Fotos bleiben auf dem Handy und werden später hochgeladen."
+                            : message
+                        self.refreshStatus()
+                    }
+                    // Leave in queue. Back off so a dead network cannot
+                    // start a new upload on every failure.
+                    self.scheduleRetry(after: waiting ? 30 : 60)
                 }
-                DispatchQueue.main.async {
-                    self.lastError = message
-                    self.refreshStatus()
-                }
-                // Leave in queue; will retry on next flush / connectivity change.
             }
+        }
+    }
+
+    private func scheduleRetry(after seconds: TimeInterval) {
+        retryAt = Date().addingTimeInterval(seconds)
+        guard !retryScheduled else { return }
+        retryScheduled = true
+        queue.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self else { return }
+            self.retryScheduled = false
+            self.retryAt = nil
+            self.uploadNextOnQueue()
+        }
+    }
+
+    private static func isOffline(_ error: Error) -> Bool {
+        let urlError = error as? URLError
+        switch urlError?.code {
+        case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+             .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+             .dataNotAllowed, .internationalRoamingOff, .cancelled:
+            return true
+        default:
+            let text = error.localizedDescription.lowercased()
+            return text.contains("offline") || text.contains("internet")
+                || text.contains("network") || text.contains("timed out")
         }
     }
 
@@ -214,6 +278,8 @@ final class GitHubSync: ObservableObject {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
+        request.timeoutInterval = 20
+        request.allowsCellularAccess = true
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

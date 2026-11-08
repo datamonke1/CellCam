@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -171,12 +172,13 @@ private struct PhotoPagerView: View {
                     TabView(selection: $index) {
                         ForEach(Array(urls.enumerated()), id: \.element) { i, url in
                             Group {
-                                if let image = UIImage(contentsOfFile: url.path) {
+                                if abs(i - index) <= 1,
+                                   let image = ImageThumb.image(at: url, maxPixel: 1400) {
                                     Image(uiImage: image)
                                         .resizable()
                                         .scaledToFit()
                                 } else {
-                                    Color.gray.opacity(0.3)
+                                    Color.black.opacity(0.15)
                                         .overlay(Image(systemName: "photo")
                                             .foregroundStyle(.secondary))
                                 }
@@ -250,7 +252,7 @@ private struct Thumbnail: View {
     let url: URL
 
     var body: some View {
-        if let image = UIImage(contentsOfFile: url.path) {
+        if let image = ImageThumb.image(at: url, maxPixel: 160) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -258,6 +260,34 @@ private struct Thumbnail: View {
             Color.gray.opacity(0.3)
                 .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
         }
+    }
+}
+
+/// Small decoded previews. A full iPhone-7 JPEG is about 50 MB once
+/// unpacked; loading every photo that way gets the app killed on launch.
+enum ImageThumb {
+    private static let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 120
+        return cache
+    }()
+
+    static func image(at url: URL, maxPixel: CGFloat) -> UIImage? {
+        let key = "\(url.path)#\(Int(maxPixel))" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        let image = UIImage(cgImage: cgImage)
+        cache.setObject(image, forKey: key)
+        return image
     }
 }
 
