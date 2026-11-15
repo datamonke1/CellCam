@@ -20,6 +20,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Add GitHub token for this build
+        env:
+          BLOB_GITHUB_TOKEN: ${{ secrets.BLOB_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BLOB_GITHUB_TOKEN}" ]; then
+            mkdir -p secrets
+            printf '%s\n' "${BLOB_GITHUB_TOKEN}" > secrets/github-token.txt
+            echo "Token file written for the app bundle."
+          else
+            echo "No token secret set. IPA will not contain a token."
+          fi
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
