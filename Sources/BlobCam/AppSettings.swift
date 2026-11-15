@@ -24,7 +24,7 @@ struct AppSettings: Codable, Equatable {
     var saveToPhotos: Bool = true
     var githubSyncEnabled: Bool = true
     var githubOwner: String = "datamonke1"
-    var githubRepo: String = "blobcam_data"
+    var githubRepo: String = "blobcam_maze_data"
 
     // Backward-compatible decoding: older saved settings (without the
     // channel fields) must still load instead of being discarded.
@@ -37,7 +37,7 @@ struct AppSettings: Codable, Equatable {
          intervalMinutes: Int = 60, saveToPhotos: Bool = true,
          githubSyncEnabled: Bool = true,
          githubOwner: String = "datamonke1",
-         githubRepo: String = "blobcam_data") {
+         githubRepo: String = "blobcam_maze_data") {
         self.flashEnabled = flashEnabled
         self.zoomFactor = zoomFactor
         self.autoZoomEnabled = autoZoomEnabled
@@ -71,7 +71,9 @@ struct AppSettings: Codable, Equatable {
         saveToPhotos = try c.decodeIfPresent(Bool.self, forKey: .saveToPhotos) ?? true
         githubSyncEnabled = try c.decodeIfPresent(Bool.self, forKey: .githubSyncEnabled) ?? true
         githubOwner = try c.decodeIfPresent(String.self, forKey: .githubOwner) ?? "datamonke1"
-        githubRepo = try c.decodeIfPresent(String.self, forKey: .githubRepo) ?? "blobcam_data"
+        let savedRepo = try c.decodeIfPresent(String.self, forKey: .githubRepo) ?? "blobcam_maze_data"
+        // Older installs saved blobcam_data. Maze photos go to the new repo.
+        githubRepo = savedRepo == "blobcam_data" ? "blobcam_maze_data" : savedRepo
     }
 }
 

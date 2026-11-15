@@ -416,7 +416,7 @@ struct ContentView: View {
                 .buttonStyle(.bordered)
                 .disabled(!githubSyncEnabled)
             }
-            Text("Token: github.com → Settings → Developer settings → Fine-grained tokens → Generate, nur Repo blobcam_data, Berechtigung Contents: Read and write. Einmalig einfügen.")
+            Text("Beim Start lädt die App github-token.txt automatisch (mitgeliefert oder über USB in Dokumente). Fine-grained Token, nur Repo blobcam_maze_data, Contents: Read and write.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(github.statusText)

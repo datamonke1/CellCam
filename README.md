@@ -37,9 +37,12 @@ names when the app was renamed to BlobCam, so updating the app keeps all
 existing photos and saved settings.
 
 When the iPhone has internet, BlobCam also uploads each JPEG to the private
-repo [datamonke1/blobcam_data](https://github.com/datamonke1/blobcam_data)
-(`photos/` folder). Paste a GitHub token once in **Settings → GitHub-Sync**
-(fine-grained PAT, Contents: Read and write, only that repo). Sync needs the
+repo [datamonke1/blobcam_maze_data](https://github.com/datamonke1/blobcam_maze_data)
+(`photos/` folder). At launch the app loads `github-token.txt` by itself:
+the copy built into the app, or a file placed in the app's Documents folder
+over USB. That file replaces the previously saved token. It must be a
+fine-grained PAT with Contents: Read and write on `blobcam_maze_data` only.
+Sync needs the
 app in the foreground (same iOS camera rule).
 
 ## Project layout

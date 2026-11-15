@@ -14,6 +14,10 @@ targets:
     platform: iOS
     sources:
       - path: Sources/BlobCam
+      # Loaded automatically at launch. Gitignored, so it is only in local builds.
+      - path: secrets/github-token.txt
+        optional: true
+        buildPhase: resources
     info:
       path: Sources/BlobCam/Info.plist
       properties:

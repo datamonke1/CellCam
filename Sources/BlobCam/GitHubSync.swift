@@ -2,7 +2,7 @@ import Foundation
 import Network
 import UIKit
 
-/// Uploads captured JPEGs to the private GitHub repo `blobcam_data`
+/// Uploads captured JPEGs to the private GitHub repo `blobcam_maze_data`
 /// whenever the iPhone has an internet connection.
 ///
 /// Uses the GitHub Contents API (one commit per file). Photos stay in the
@@ -21,7 +21,7 @@ final class GitHubSync: ObservableObject {
 
     var enabled = true
     var owner = "datamonke1"
-    var repo = "blobcam_data"
+    var repo = "blobcam_maze_data"
 
     private let queue = DispatchQueue(label: "dev.datamonke1.cellcam.github")
     private var busy = false
@@ -35,6 +35,9 @@ final class GitHubSync: ObservableObject {
     private let tokenKey = "cellcam.github.token"
 
     private init() {
+        // Replace a previously saved token before the first upload.
+        importBundledTokenIfPresent()
+        importTokenFileIfPresent()
         hasToken = !(loadToken() ?? "").isEmpty
         pendingCount = pendingNames().count
         uploadedCount = syncedNames().count
@@ -67,22 +70,40 @@ final class GitHubSync: ObservableObject {
         if enabled { flush() }
     }
 
+    /// Token built into this app version. Replaces whatever was saved before.
+    func importBundledTokenIfPresent() {
+        guard let token = readToken(at: Bundle.main.url(
+            forResource: "github-token", withExtension: "txt")) else { return }
+        saveToken(token)
+    }
+
     /// If `Documents/github-token.txt` exists (copied over USB), save that
     /// token and delete the file so it does not stay on disk.
+    /// A file here wins over the bundled token.
     func importTokenFileIfPresent() {
         guard let docs = try? FileManager.default.url(
             for: .documentDirectory, in: .userDomainMask,
             appropriateFor: nil, create: false) else { return }
         let url = docs.appendingPathComponent("github-token.txt")
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        guard let token = readToken(at: url) else { return }
+        try? FileManager.default.removeItem(at: url)
+        saveToken(token)
+        DispatchQueue.main.async {
+            self.hasToken = true
+            self.lastError = nil
+            self.refreshStatus()
+        }
+        flush()
+    }
+
+    private func readToken(at url: URL?) -> String? {
+        guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         let token = text
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty && !$0.hasPrefix("#") }
-        try? FileManager.default.removeItem(at: url)
-        if let token, token.count > 20 {
-            setToken(token)
-        }
+        guard let token, token.count > 20 else { return nil }
+        return token
     }
 
     func setToken(_ token: String) {
@@ -310,7 +331,7 @@ final class GitHubSync: ObservableObject {
             }
             if code == 401 || code == 403 {
                 completion(.failure(NSError(domain: "GitHubSync", code: code,
-                                            userInfo: [NSLocalizedDescriptionKey: "GitHub-Token ungültig oder keine Rechte auf blobcam_data (HTTP \(code))."])))
+                                            userInfo: [NSLocalizedDescriptionKey: "GitHub-Token ungültig oder keine Rechte auf \(self.repo) (HTTP \(code))."])))
                 return
             }
             completion(.failure(NSError(domain: "GitHubSync", code: code,
