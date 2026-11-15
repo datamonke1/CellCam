@@ -14,10 +14,17 @@ targets:
     platform: iOS
     sources:
       - path: Sources/BlobCam
-      # Loaded automatically at launch. Gitignored, so it is only in local builds.
-      - path: secrets/github-token.txt
-        optional: true
-        buildPhase: resources
+    # Copy the token into the app only when the gitignored file exists.
+    # Cloud builds have no token and still succeed.
+    postBuildScripts:
+      - name: Bundle GitHub token if present
+        basedOnDependencyAnalysis: false
+        script: |
+          TOKEN="${SRCROOT}/secrets/github-token.txt"
+          DEST="${BUILT_PRODUCTS_DIR}/${WRAPPER_NAME}/github-token.txt"
+          if [ -f "$TOKEN" ]; then
+            cp "$TOKEN" "$DEST"
+          fi
     info:
       path: Sources/BlobCam/Info.plist
       properties:
