@@ -307,13 +307,16 @@ final class CameraService: NSObject, ObservableObject {
         let sorted = urls
             .filter { $0.pathExtension.lowercased() == "jpg" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let visible = sorted.filter {
+            Self.isNewerThanCutoff($0.lastPathComponent)
+        }
         let totalBytes = sorted.reduce(Int64(0)) { sum, url in
             sum + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
         // Measured consumption per series: sum the sizes of all series
         // photos (Foto-1/2/3) and divide by the number of series.
         var seriesBytes: [String: Int64] = [:]
-        for url in sorted where Self.photoNumber(fromFileName: url.lastPathComponent) != nil {
+        for url in visible where Self.photoNumber(fromFileName: url.lastPathComponent) != nil {
             let id = Self.seriesID(fromFileName: url.lastPathComponent)
             seriesBytes[id, default: 0] += Int64(
                 (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
@@ -325,13 +328,13 @@ final class CameraService: NSObject, ObservableObject {
         let freeBytes = (try? FileManager.default.attributesOfFileSystem(
             forPath: dir.path)[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
         DispatchQueue.main.async { [weak self] in
-            self?.photoURLs = sorted
-            self?.photoCount = sorted.count
+            self?.photoURLs = visible
+            self?.photoCount = visible.count
             self?.totalPhotoBytes = totalBytes
             self?.deviceFreeBytes = freeBytes
             self?.seriesCount = measuredSeriesCount
             self?.averageSeriesBytes = measuredAverage
-            if let last = sorted.last {
+            if let last = visible.last {
                 self?.lastPhotoAt = Self.date(fromFileName: last.lastPathComponent)
             }
         }
@@ -349,6 +352,23 @@ final class CameraService: NSObject, ObservableObject {
             try? FileManager.default.removeItem(at: url)
         }
         loadSavedPhotos()
+    }
+
+    /// Photos at or before this local time stay on disk, but are hidden and not uploaded.
+    static let visibleSince: Date = {
+        var parts = DateComponents()
+        parts.year = 2026
+        parts.month = 11
+        parts.day = 15
+        parts.hour = 19
+        parts.minute = 0
+        parts.second = 0
+        return Calendar.current.date(from: parts) ?? .distantFuture
+    }()
+
+    static func isNewerThanCutoff(_ name: String) -> Bool {
+        guard let date = date(fromFileName: name) else { return false }
+        return date > visibleSince
     }
 
     static func date(fromFileName name: String) -> Date? {

@@ -125,6 +125,7 @@ final class GitHubSync: ObservableObject {
     /// Queue a just-saved photo for upload (no-op if already synced).
     func enqueue(fileURL: URL) {
         let name = fileURL.lastPathComponent
+        guard CameraService.isNewerThanCutoff(name) else { return }
         var pending = pendingNames()
         var synced = syncedNames()
         if synced.contains(name) { return }
@@ -146,9 +147,12 @@ final class GitHubSync: ObservableObject {
             at: directory, includingPropertiesForKeys: nil)) ?? []
         var pending = pendingNames()
         let synced = syncedNames()
-        var changed = false
+        let kept = pending.filter { CameraService.isNewerThanCutoff($0) }
+        var changed = kept.count != pending.count
+        pending = kept
         for url in files where url.pathExtension.lowercased() == "jpg" {
             let name = url.lastPathComponent
+            guard CameraService.isNewerThanCutoff(name) else { continue }
             if synced.contains(name) || pending.contains(name) { continue }
             pending.append(name)
             changed = true
@@ -190,6 +194,8 @@ final class GitHubSync: ObservableObject {
             return
         }
         var pending = pendingNames()
+        pending.removeAll { !CameraService.isNewerThanCutoff($0) }
+        savePending(pending)
         guard let name = pending.first else {
             DispatchQueue.main.async { self.refreshStatus() }
             return
